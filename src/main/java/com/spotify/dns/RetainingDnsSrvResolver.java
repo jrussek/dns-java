@@ -18,6 +18,8 @@ package com.spotify.dns;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Multimap;
 import com.google.common.net.HostAndPort;
 
 import java.util.List;
@@ -34,19 +36,24 @@ import static com.google.common.base.Objects.firstNonNull;
  */
 class RetainingDnsSrvResolver implements DnsSrvResolver {
   private final DnsSrvResolver delegate;
-  private final Map<String, List<HostAndPort>> cache;
+  private final Map<String, Multimap<HostAndPort, Long>> cache;
 
   RetainingDnsSrvResolver(DnsSrvResolver delegate) {
     this.delegate = Preconditions.checkNotNull(delegate, "delegate");
-    cache = new ConcurrentHashMap<String, List<HostAndPort>>();
+    cache = new ConcurrentHashMap<String, Multimap<HostAndPort, Long>>();
   }
 
   @Override
   public List<HostAndPort> resolve(final String fqdn) {
+    return ImmutableList.copyOf(resolveWithTTL(fqdn).keys());
+  }
+
+  @Override
+  public Multimap<HostAndPort, Long> resolveWithTTL(String fqdn) {
     Preconditions.checkNotNull(fqdn, "fqdn");
 
     try {
-      List<HostAndPort> nodes = delegate.resolve(fqdn);
+      Multimap<HostAndPort, Long> nodes = delegate.resolveWithTTL(fqdn);
 
       if (nodes.isEmpty()) {
         nodes = firstNonNull(cache.get(fqdn), nodes);

@@ -18,6 +18,8 @@ package com.spotify.dns;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMultimap;
+import com.google.common.collect.Multimap;
 import com.google.common.net.HostAndPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +35,7 @@ import java.util.List;
  */
 class XBillDnsSrvResolver implements DnsSrvResolver {
   private static final Logger LOG = LoggerFactory.getLogger(XBillDnsSrvResolver.class);
-  
+
   private final LookupFactory lookupFactory;
 
   XBillDnsSrvResolver(LookupFactory lookupFactory) {
@@ -42,33 +44,39 @@ class XBillDnsSrvResolver implements DnsSrvResolver {
 
   @Override
   public List<HostAndPort> resolve(final String fqdn) {
+    return ImmutableList.copyOf(resolveWithTTL(fqdn).keys());
+  }
+
+  @Override
+  public Multimap<HostAndPort, Long> resolveWithTTL(final String fqdn) {
     Lookup lookup = lookupFactory.forName(fqdn);
     Record[] queryResult = lookup.run();
 
     switch (lookup.getResult()) {
       case Lookup.SUCCESSFUL:
-        return toHostAndPorts(queryResult);
+        return toHostAndPortsWithTTL(queryResult);
       case Lookup.HOST_NOT_FOUND:
         // fallthrough
       case Lookup.TYPE_NOT_FOUND:
         LOG.warn("No results returned for query '{}'; result from XBill: {} - {}",
             fqdn, lookup.getResult(), lookup.getErrorString());
-        return ImmutableList.of();
+        return ImmutableMultimap.of();
       default:
         throw new DnsException(
             String.format("Lookup of '%s' failed with code: %d - %s ",
-                fqdn, lookup.getResult(), lookup.getErrorString()));
+                fqdn, lookup.getResult(), lookup.getErrorString())
+        );
     }
   }
 
-  private List<HostAndPort> toHostAndPorts(Record[] queryResult) {
-    ImmutableList.Builder<HostAndPort> builder = ImmutableList.builder();
+  private Multimap<HostAndPort, Long> toHostAndPortsWithTTL(Record[] queryResult) {
+    ImmutableMultimap.Builder<HostAndPort, Long> builder = ImmutableMultimap.builder();
 
     if (queryResult != null) {
-      for (Record record: queryResult) {
+      for (Record record : queryResult) {
         if (record instanceof SRVRecord) {
           SRVRecord srvRecord = (SRVRecord) record;
-          builder.add(HostAndPort.fromParts(srvRecord.getTarget().toString(), srvRecord.getPort()));
+          builder.put(HostAndPort.fromParts(srvRecord.getTarget().toString(), srvRecord.getPort()), srvRecord.getTTL());
         }
       }
     }

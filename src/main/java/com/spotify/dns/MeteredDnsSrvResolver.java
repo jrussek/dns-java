@@ -16,6 +16,8 @@
 
 package com.spotify.dns;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Multimap;
 import com.google.common.net.HostAndPort;
 import com.yammer.metrics.core.Counter;
 import com.yammer.metrics.core.Timer;
@@ -43,6 +45,11 @@ class MeteredDnsSrvResolver implements DnsSrvResolver {
 
   @Override
   public List<HostAndPort> resolve(String fqdn) {
+    return ImmutableList.copyOf(resolveWithTTL(fqdn).keys());
+  }
+
+  @Override
+  public Multimap<HostAndPort, Long> resolveWithTTL(String fqdn) {
     // using a boolean to track whether or not an exception was thrown - that means I don't
     // need to worry about how to rethrow the exception; instead, I can take whatever action I
     // want in the finally clause.
@@ -50,14 +57,13 @@ class MeteredDnsSrvResolver implements DnsSrvResolver {
     final TimerContext context = timer.time();
 
     try {
-      List<HostAndPort> result = delegate.resolve(fqdn);
+      Multimap<HostAndPort, Long> result = delegate.resolveWithTTL(fqdn);
       if (result.isEmpty()) {
         emptyCounter.inc();
       }
       success = true;
       return result;
-    }
-    finally {
+    } finally {
       context.stop();
       if (!success) {
         failureCounter.inc();

@@ -16,6 +16,7 @@
 
 package com.spotify.dns;
 
+import com.google.common.collect.Multimap;
 import com.google.common.net.HostAndPort;
 
 import java.util.List;
@@ -33,4 +34,6 @@ public interface DnsSrvResolver {
    * @throws DnsException if there was an error doing the DNS lookup
    */
   List<HostAndPort> resolve(String fqdn);
+
+  Multimap<HostAndPort, Long> resolveWithTTL(String fqdn);
 }
